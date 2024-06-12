@@ -16,6 +16,7 @@ def read_sink_data(input_filename_sink, timestamp):
             print("Opened sink file")
             for line_sink in f_sink:
                 ts_sink, process_id_sink = line_sink.strip().split(",")
+                ts_sink = int(ts_sink)
                 if ts_sink < timestamp + 60000:
                     one_min_data.append((ts_sink, process_id_sink))
                     data_to_cut.append(line_sink)
@@ -39,15 +40,12 @@ def write_one_min_data(output_filename, one_min_data):
 
 def cut_sink_data(input_file_sink, data_to_cut):
     try:
-        with open(input_file_sink, "r") as f, open(
-            input_file_sink + ".temp", "w"
-        ) as fw:
+        with open(input_file_sink, "r") as f, open(input_file_sink + ".temp", "w") as fw:
             for line in f:
                 if line not in data_to_cut:
                     fw.write(line)
-            os.remove(input_file_sink)
-            os.remove(input_file_sink + ".temp", input_file_sink)
-            print("Data cut from the sink file.")
+        os.rename(input_file_sink + ".temp", input_file_sink)
+        print("Data cut from the sink file.")
 
     except Exception as e:
         print(f"Error cutting sink data: {e}")
@@ -58,11 +56,10 @@ def calc_latency(input_file_spout, one_min_data):
     try:
         with open(input_file_spout, "r") as f_spout:
             print("Opened spout file")
+            spout_data = f_spout.readlines()
             for ts_sink, process_id_sink in one_min_data:
                 process_id_sink = int(process_id_sink)
-                ts_sink = int(ts_sink)
-                f_spout.seek(0)
-                for line_spout in f_spout:
+                for line_spout in spout_data:
                     ts_spout, _, process_id_spout = line_spout.strip().split(",")[0:3]
                     ts_spout = int(ts_spout)
                     if process_id_sink == int(process_id_spout):
@@ -79,8 +76,7 @@ def calc_metrics(latency):
     if latency:
         latency.sort()
         throughput = len(latency)
-        tail_latency = latency[int(len(latency)) * 0.95]
-
+        tail_latency = latency[int(len(latency) * 0.95)]
     else:
         throughput = 0
         tail_latency = 0
@@ -89,7 +85,7 @@ def calc_metrics(latency):
 
 
 def calc_latency_for_app(app_name, input_file_sink, input_file_spout, output_filename):
-    timestamp = int((time.time() * 10000) - 59000)
+    timestamp = int(time.time() * 1000) - 59000
     print(f"{app_name}: Timestamp: {timestamp}")
 
     one_min_data, data_to_cut = read_sink_data(input_file_sink, timestamp)
@@ -99,17 +95,13 @@ def calc_latency_for_app(app_name, input_file_sink, input_file_spout, output_fil
     latency = calc_latency(input_file_spout, one_min_data)
     tail_latency, throughput = calc_metrics(latency)
 
-    print(
-        f"Latency calculation completed. Throughput: {throughput}, Tail latency: {tail_latency}"
-    )
+    print(f"Latency calculation completed. Throughput: {throughput}, Tail latency: {tail_latency}")
     return tail_latency, throughput
 
 
 def main():
-    input_filename_sink = (
-        "/home/cc/storm/riot-bench/output/sink-IoTTrainTopologySYS-PLUG-2100-100.0.log"
-    )
-    input_filename_spout = "//home/cc/storm/riot-bench/output/spout-IoTTrainTopologySYS-PLUG-2100-100.0.log24750000000007"
+    input_filename_sink = "/home/cc/storm/riot-bench/output/sink-IoTTrainTopologySYS-PLUG-2100-100.0.log"
+    input_filename_spout = "/home/cc/storm/riot-bench/output/spout-IoTTrainTopologySYS-PLUG-2100-100.0.log"
     output_filename = "/home/cc/riot-bench/output/one-minute.log"
 
     while True:
@@ -119,9 +111,7 @@ def main():
             "ETLTopologySYS", input_filename_sink, input_filename_spout, output_filename
         )
         try:
-            with open(
-                "/home/cc/storm/riot-bench.output/skopt_input_ETLTopologySys.txt", "a+"
-            ) as f:
+            with open("/home/cc/storm/riot-bench.output/skopt_input_ETLTopologySys.txt", "a+") as f:
                 f.write(json.dumps(result) + "\n")
         except Exception as e:
             print(f"Error writing results: {e}")
