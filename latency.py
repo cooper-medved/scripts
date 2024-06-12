@@ -5,7 +5,10 @@ import time
 import os
 import json
 import timeit
+from loguru import logger
 
+# Configure loguru logger
+logger.add("latency_throughput_log.log", rotation="1 MB", retention="10 days", level="INFO")
 
 def read_sink_data(input_filename_sink, timestamp):
     data_to_cut = []
@@ -13,7 +16,7 @@ def read_sink_data(input_filename_sink, timestamp):
 
     try:
         with open(input_filename_sink, "r") as f_sink:
-            print("Opened sink file")
+            logger.info("Opened sink file")
             for line_sink in f_sink:
                 ts_sink, process_id_sink = line_sink.strip().split(",")
                 ts_sink = int(ts_sink)
@@ -24,19 +27,17 @@ def read_sink_data(input_filename_sink, timestamp):
                     break
 
     except Exception as e:
-        print(f"Error reading sink data: {e}")
+        logger.error(f"Error reading sink data: {e}")
     return one_min_data, data_to_cut
-
 
 def write_one_min_data(output_filename, one_min_data):
     try:
         with open(output_filename, "w") as dest_file:
             for ts_sink, process_id in one_min_data:
                 dest_file.write(f"{ts_sink},{process_id}\n")
-            print(f"one-min data stored in {output_filename}")
+            logger.info(f"One-minute data stored in {output_filename}")
     except Exception as e:
-        print(f"Error writing one-min data: {e}")
-
+        logger.error(f"Error writing one-minute data: {e}")
 
 def cut_sink_data(input_file_sink, data_to_cut):
     try:
@@ -45,17 +46,16 @@ def cut_sink_data(input_file_sink, data_to_cut):
                 if line not in data_to_cut:
                     fw.write(line)
         os.rename(input_file_sink + ".temp", input_file_sink)
-        print("Data cut from the sink file.")
+        logger.info("Data cut from the sink file.")
 
     except Exception as e:
-        print(f"Error cutting sink data: {e}")
-
+        logger.error(f"Error cutting sink data: {e}")
 
 def calc_latency(input_file_spout, one_min_data):
     latency = []
     try:
         with open(input_file_spout, "r") as f_spout:
-            print("Opened spout file")
+            logger.info("Opened spout file")
             spout_data = f_spout.readlines()
             for ts_sink, process_id_sink in one_min_data:
                 process_id_sink = int(process_id_sink)
@@ -68,9 +68,8 @@ def calc_latency(input_file_spout, one_min_data):
                         break
 
     except Exception as e:
-        print(f"Error calculating latency: {e}")
+        logger.error(f"Error calculating latency: {e}")
     return latency
-
 
 def calc_metrics(latency):
     if latency:
@@ -83,10 +82,9 @@ def calc_metrics(latency):
 
     return tail_latency, throughput
 
-
 def calc_latency_for_app(app_name, input_file_sink, input_file_spout, output_filename):
     timestamp = int(time.time() * 1000) - 59000
-    print(f"{app_name}: Timestamp: {timestamp}")
+    logger.info(f"{app_name}: Timestamp: {timestamp}")
 
     one_min_data, data_to_cut = read_sink_data(input_file_sink, timestamp)
     write_one_min_data(output_filename, one_min_data)
@@ -95,9 +93,8 @@ def calc_latency_for_app(app_name, input_file_sink, input_file_spout, output_fil
     latency = calc_latency(input_file_spout, one_min_data)
     tail_latency, throughput = calc_metrics(latency)
 
-    print(f"Latency calculation completed. Throughput: {throughput}, Tail latency: {tail_latency}")
+    logger.info(f"Latency calculation completed. Throughput: {throughput}, Tail latency: {tail_latency}")
     return tail_latency, throughput
-
 
 def main():
     input_filename_sink = "/home/cc/storm/riot-bench/output/sink-IoTTrainTopologySYS-PLUG-2100-100.0.log"
@@ -114,13 +111,12 @@ def main():
             with open("/home/cc/storm/riot-bench.output/skopt_input_ETLTopologySys.txt", "a+") as f:
                 f.write(json.dumps(result) + "\n")
         except Exception as e:
-            print(f"Error writing results: {e}")
+            logger.error(f"Error writing results: {e}")
         stop = timeit.default_timer()
         time_taken = stop - start
-        print(f"Time taken: {time_taken} seconds")
+        logger.info(f"Time taken: {time_taken} seconds")
         minute = 60 - time_taken
         time.sleep(max(0, minute))
-
 
 if __name__ == "__main__":
     main()
